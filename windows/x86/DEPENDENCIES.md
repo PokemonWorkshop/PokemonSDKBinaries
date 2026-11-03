@@ -10,6 +10,9 @@ revisions and target settings. [The source lock](../../config/windows-x86-source
 pins source archives by name, SHA-256 and URL.
 [The package lock](../../config/windows-x86-packages.lock) pins the private
 MSYS2 packages, including transitive prerequisites, by URL and SHA-256.
+OpenSSL 3.5.9 is built from the shared source archive into the private dependency
+prefix. The toolchain retains its locked OpenSSL 3.6.4 package for build tools;
+that package does not supply the shipped Ruby runtime's OpenSSL.
 
 ## Library versions
 
@@ -17,11 +20,11 @@ MSYS2 packages, including transitive prerequisites, by URL and SHA-256.
 | --- | --- | --- |
 | Ruby | 3.4.10 | Source |
 | SFML | 2.6.2 | Source |
-| FFmpeg | 6.0 | Source |
+| FFmpeg | 6.1.6 | Source |
 | OpenAL Soft | 1.23.1 | Source |
 | FriBidi | 1.0.16 | Source |
-| libass | 0.17.3 | Source |
-| OpenSSL | 3.6.4 | MSYS2 package |
+| libass | 0.17.5 | Source |
+| OpenSSL | 3.5.9 | Source |
 | libyaml | 0.2.5 | MSYS2 package |
 | zlib | 1.3.2 | MSYS2 package |
 | libffi | 3.8.0 | MSYS2 package |
@@ -52,9 +55,16 @@ source-built Ruby. Bootstrap also downloads pinned standalone 7-Zip 26.03 tools.
 
 ## Selection notes
 
-SFML stays on the 2.x API and Ruby stays on the shared 3.4 ABI. OpenAL Soft
-1.23.1 uses a compiler include workaround described in the build notes.
-FFmpeg 6.0 and libass 0.17.3 differ from Linux; OpenSSL 3.6.4 differs from the
-Linux/macOS source selection. The repository does not record a compatibility
-requirement for every version difference. Package pinning does not by itself
-establish byte-for-byte reproducibility.
+Shared runtime libraries match the Linux source selections. Libraries supplied
+by MSYS2 use the same upstream versions, even though their package release
+suffixes and build options are platform-specific. OpenSSL is source-built so
+all three runtimes use 3.5.9, while the private toolchain can keep its own 3.6.4
+package. OpenAL Soft 1.23.1 retains the compiler include workaround documented
+in the build notes.
+
+[The pin checker](../../.github/scripts/check-dependency-pins.py) compares source
+archives, matching MSYS2 runtime package versions and component configuration
+pins before CI builds. The shared runtime suite checks OpenSSL's compiled and
+loaded library versions and FFmpeg's loaded version. The aligned dependency
+update still needs native Windows CI verification. Package pinning does not
+by itself establish byte-for-byte reproducibility.

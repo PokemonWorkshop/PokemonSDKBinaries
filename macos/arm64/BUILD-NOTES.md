@@ -38,9 +38,11 @@ prints `mkmf.log` before CI removes the temporary SDK.
 Ruby configure options disable DTrace/JIT build dependencies and optional native
 dbm/gdbm/readline extensions; Ruby 3.4's Reline is still bundled. Font rendering
 uses source-built FreeType/HarfBuzz/FriBidi/libass with Apple's CoreText provider.
+The HarfBuzz build disables optional subset/raster/vector/GPU targets, matching
+Linux's minimal build.
 FFmpeg uses generic ARM64 code and shared libraries, disables autodetection and
 networking, and enables PNG/mov_text decoding. It does not enable
-GPL/nonfree codecs. macOS pins FFmpeg 6.0; Linux pins 6.1.6.
+GPL/nonfree codecs. All three platforms pin FFmpeg 6.1.6.
 
 ## Binary audits
 

@@ -34,18 +34,18 @@ jobs:
           name: windows-bootstrap-diagnostics
           path: generated/windows-x86/extract-msys2.*.log
           if-no-files-found: ignore
-      - name: Test the PE auditor and Windows layout contract
+      - name: Check shared dependency pins and test the PE auditor and layout contract
         run: |
           $env:MSYSTEM = 'MINGW32'
           $env:CHERE_INVOKING = '1'
-          & ./generated/windows-x86/msys64/usr/bin/bash.exe -lc 'source windows/x86/env.sh; python windows/x86/test_pe.py && python windows/x86/test_layout.py'
-          if ($LASTEXITCODE) { throw 'PE auditor tests failed' }
+          & ./generated/windows-x86/msys64/usr/bin/bash.exe -lc 'source windows/x86/env.sh; python .github/scripts/check-dependency-pins.py && python windows/x86/test_pe.py && python windows/x86/test_layout.py'
+          if ($LASTEXITCODE) { throw 'Dependency pins or PE/layout auditor checks failed' }
       - name: Download and extract the FMOD Windows installer
         env:
           FMOD_USER: ${{ secrets.FMOD_USER }}
           FMOD_PASSWORD: ${{ secrets.FMOD_PASSWORD }}
         run: ./windows/x86/run.ps1 download-fmod
-      - name: Build 32-bit SFML, FFmpeg and subtitle dependencies
+      - name: Build 32-bit OpenSSL, SFML, FFmpeg and subtitle dependencies
         run: ./windows/x86/run.ps1 dependencies
       - name: Build embedded 32-bit Ruby
         run: ./windows/x86/run.ps1 ruby

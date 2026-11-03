@@ -84,8 +84,12 @@ to native sfeMovie.
 
 Merge component changes upstream first, then update immutable repository URLs
 and commit pins consistently across the platform configurations in `config/`.
-Update source and package locks when dependencies change. Document any necessary
-platform differences instead of silently letting ports diverge.
+Update source and package locks when dependencies change. Keep shared runtime
+library versions aligned; macOS's OS-provided OpenAL, zlib and libffi are explicit
+exceptions. Run `python3 .github/scripts/check-dependency-pins.py` to check source
+pins, matching Windows package versions and platform configurations. All three
+CI builders run this check. Document any necessary platform differences instead
+of silently letting ports diverge.
 
 Keep Ruby version and ABI changes coordinated across platforms, launchers and
 tests. A dependency update also needs compatibility validation: a newer release
@@ -200,7 +204,7 @@ Windows.
 Run the [shared functional suite](tests/README.md) from the relocated runtime
 using its bundled Ruby. Extend the target expectations in
 [runtime-functional.rb](tests/runtime-functional.rb), including Ruby platform,
-pointer size and codec-library path. The current expectations are specific to
+pointer size and codec/utility-library paths. The current expectations are specific to
 the three existing targets; adding an architecture may require changing how the
 test selects a target. Preserve assertions for existing platforms.
 

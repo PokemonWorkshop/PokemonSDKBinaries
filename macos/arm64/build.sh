@@ -69,7 +69,9 @@ dependencies() {
   dependency vorbis cmake_build vorbis -DBUILD_TESTING=OFF
   dependency flac cmake_build flac -DBUILD_CXXLIBS=OFF -DBUILD_PROGRAMS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF -DINSTALL_MANPAGES=OFF
   dependency freetype cmake_build freetype -DFT_DISABLE_HARFBUZZ=ON -DFT_DISABLE_PNG=ON -DFT_DISABLE_BROTLI=ON -DFT_DISABLE_BZIP2=ON
-  dependency harfbuzz cmake_build harfbuzz -DHB_HAVE_FREETYPE=ON -DHB_HAVE_GLIB=OFF -DHB_HAVE_ICU=OFF -DHB_BUILD_UTILS=OFF -DHB_BUILD_TESTS=OFF
+  dependency harfbuzz cmake_build harfbuzz -DHB_HAVE_FREETYPE=ON -DHB_HAVE_GLIB=OFF -DHB_HAVE_ICU=OFF \
+    -DHB_BUILD_UTILS=OFF -DHB_BUILD_TESTS=OFF -DHB_BUILD_SUBSET=OFF \
+    -DHB_BUILD_RASTER=OFF -DHB_BUILD_VECTOR=OFF -DHB_BUILD_GPU=OFF
   dependency fribidi autotools_build fribidi --disable-docs
   # The Apple SDK provides zlib without a pkg-config file. Supply the known
   # source-built font libraries explicitly instead of searching Homebrew.

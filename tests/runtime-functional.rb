@@ -5,14 +5,15 @@ RUNTIME_ROOT = File.expand_path('../..', __dir__)
 ENV['ALSOFT_DRIVERS'] = 'null'
 abort 'Expected Ruby 3.4.10' unless RUBY_VERSION == '3.4.10'
 platform = ENV.fetch('PSDK_TEST_PLATFORM')
-expected_platform, pointer_bytes, codec_path = {
-  'windows' => [/\Ai386-mingw32\z/, 4, 'ruby_builtin_dlls/avcodec-60.dll'],
-  'macos' => [/\Aarm64-darwin/, 8, 'lib/libavcodec.60.dylib'],
-  'linux' => [/\Ax86_64-linux/, 8, 'lib/libavcodec.so.60']
+expected_platform, pointer_bytes, codec_path, utility_path = {
+  'windows' => [/\Ai386-mingw32\z/, 4, 'ruby_builtin_dlls/avcodec-60.dll', 'ruby_builtin_dlls/avutil-58.dll'],
+  'macos' => [/\Aarm64-darwin/, 8, 'lib/libavcodec.60.dylib', 'lib/libavutil.58.dylib'],
+  'linux' => [/\Ax86_64-linux/, 8, 'lib/libavcodec.so.60', 'lib/libavutil.so.58']
 }.fetch(platform)
 abort "Unexpected platform: #{RUBY_PLATFORM}" unless expected_platform.match?(RUBY_PLATFORM)
 abort 'Unexpected pointer size' unless [0].pack('J').bytesize == pointer_bytes
 AVCODEC_PATH = File.join(RUNTIME_ROOT, codec_path)
+AVUTIL_PATH = File.join(RUNTIME_ROOT, utility_path)
 $stdout.sync = true
 abort 'RubyGems unexpectedly enabled' if ENV['PSDK_EXPECT_NO_GEMS'] == '1' && defined?(Gem)
 %w[openssl psych zlib fiddle/import socket json bigdecimal date stringio strscan
@@ -30,6 +31,8 @@ abort 'NKF failed' unless NKF.nkf('-w', 'PSDK') == 'PSDK'
 abort 'RubyGems loaded during legacy requires' if ENV['PSDK_EXPECT_NO_GEMS'] == '1' && defined?(Gem)
 abort 'zlib failed' unless Zlib.inflate(Zlib.deflate('PSDK')) == 'PSDK'
 abort 'OpenSSL failed' unless OpenSSL::Digest::SHA256.hexdigest('PSDK').size == 64
+abort "Unexpected OpenSSL headers: #{OpenSSL::OPENSSL_VERSION}" unless OpenSSL::OPENSSL_VERSION.split[1] == '3.5.9'
+abort "Unexpected OpenSSL runtime: #{OpenSSL::OPENSSL_LIBRARY_VERSION}" unless OpenSSL::OPENSSL_LIBRARY_VERSION.split[1] == '3.5.9'
 abort 'Missing graphics API' unless defined?(LiteRGSS::Bitmap)
 abort 'Expected LiteCGSS fixed shader pipeline' unless LiteRGSS::Shader::LITECGSS_SHADER_FIXED_PIPELINE == true
 abort 'Missing audio API' unless defined?(SFMLAudio::Music)
@@ -71,6 +74,12 @@ module AVCodec
   dlload AVCODEC_PATH
   extern 'void *avcodec_find_decoder_by_name(const char *)'
 end
+module AVUtil
+  extend Fiddle::Importer
+  dlload AVUTIL_PATH
+  extern 'const char *av_version_info()'
+end
+abort "Unexpected FFmpeg runtime: #{AVUtil.av_version_info}" unless AVUtil.av_version_info.to_s == '6.1.6'
 %w[png mov_text h264 vorbis aac].each do |decoder|
   abort "Missing decoder: #{decoder}" if AVCodec.avcodec_find_decoder_by_name(decoder).to_i.zero?
 end

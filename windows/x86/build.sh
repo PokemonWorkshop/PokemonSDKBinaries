@@ -28,16 +28,40 @@ autotools_build() {
     ./configure --host=i686-w64-mingw32 --prefix="$PREFIX" --enable-shared --disable-static "$@"
     make -j"$JOBS"; make install)
 }
+openssl_build() {
+  local stage="$WORK/openssl-install" native_prefix
+  native_prefix="$(cygpath -m "$PREFIX")"
+  rm -rf "$stage"
+  # Use fixed install paths in the binary, then stage into our private prefix.
+  # In-tree compilation uses relative source paths; avoid recording workspace
+  # paths from the global include/link/prefix-map flags in OpenSSL build info.
+  (cd "$WORK/src/openssl"
+    CPPFLAGS= LDFLAGS= CFLAGS=-O2 CXXFLAGS=-O2 \
+      MSYS2_ARG_CONV_EXCL='--prefix=;--openssldir=' \
+      /usr/bin/perl Configure mingw shared no-tests no-module no-asm \
+        --prefix=/mingw32 --libdir=lib --openssldir=etc/ssl
+    MSYS2_ARG_CONV_EXCL='-DENGINESDIR=;-DMODULESDIR=;-DOPENSSLDIR=;-DINSTALLTOP=' \
+      make -j"$JOBS"
+    make install_sw DESTDIR="$stage")
+  cp -a "$stage/mingw32/." "$PREFIX/"
+  # OpenSSL's staged pkg-config files still refer to the fixed install prefix.
+  # Consumers must use these headers/import libraries rather than toolchain 3.6.
+  sed -i "s|/mingw32|$native_prefix|g" \
+    "$PREFIX/lib/pkgconfig/openssl.pc" "$PREFIX/lib/pkgconfig/libssl.pc" "$PREFIX/lib/pkgconfig/libcrypto.pc"
+  test "$(pkg-config --modversion openssl)" = "$OPENSSL_VERSION"
+}
 ffmpeg_build() {
   (cd "$WORK/src/ffmpeg"
     ./configure --prefix="$PREFIX" --arch=x86 --target-os=mingw32 --cc=gcc --cxx=g++ \
       --enable-shared --disable-static --disable-programs --disable-doc --disable-network \
       --disable-autodetect --disable-avfilter --disable-postproc --disable-x86asm --disable-inline-asm \
-      --enable-zlib --extra-cflags="$CFLAGS" --extra-ldflags="$LDFLAGS"
+      --enable-zlib --enable-decoder=png --enable-decoder=movtext \
+      --extra-cflags="$CFLAGS" --extra-ldflags="$LDFLAGS"
     python "$ROOT/windows/x86/normalize-ffmpeg-config.py" config.h "$ROOT" "$(cygpath -m "$ROOT")"
     make -j"$JOBS"; make install)
 }
 dependencies() {
+  dependency openssl openssl_build
   # OpenAL 1.23.1 relies on a transitive stdint include removed in newer GCC.
   dependency openal cmake_build openal -DALSOFT_UTILS=OFF -DALSOFT_EXAMPLES=OFF -DALSOFT_TESTS=OFF "-DCMAKE_CXX_FLAGS=$CXXFLAGS -include cstdint"
   dependency fribidi autotools_build fribidi --disable-docs
@@ -55,7 +79,7 @@ ruby_build() {
     "$WORK/src/ruby/configure" --host=i686-w64-mingw32 --prefix="$(cygpath -m "$RUBY")" \
       --with-baseruby="$bootstrap" --enable-shared --enable-load-relative \
       --disable-install-doc --disable-dtrace --disable-yjit --disable-rjit \
-      --with-openssl-dir="$(cygpath -m /mingw32)" --with-libyaml-dir="$(cygpath -m /mingw32)" --with-libffi-dir="$(cygpath -m /mingw32)" \
+      --with-openssl-dir="$(cygpath -m "$PREFIX")" --with-libyaml-dir="$(cygpath -m /mingw32)" --with-libffi-dir="$(cygpath -m /mingw32)" \
       --with-out-ext=dbm,gdbm,readline
     make -j"$JOBS"; make install)
 }

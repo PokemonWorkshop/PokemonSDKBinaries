@@ -21,6 +21,17 @@ already extracted, authorized SDK.
 
 ## Native build adjustments
 
+OpenSSL 3.5.9 is built first with upstream's 32-bit `mingw` target, shared
+libraries, and tests, loadable modules and assembly disabled. The build uses
+fixed `/mingw32` install paths to avoid embedding checkout paths, stages the
+installation into the private prefix, then updates its pkg-config files to
+point to that prefix. Ruby's `--with-openssl-dir` selects this source build;
+DLL assembly searches the private prefix before toolchain packages. The
+packaged runtime tests require OpenSSL 3.5.9, rejecting an accidental fallback
+to the toolchain's 3.6.4 DLLs.
+
+This follows the [upstream MinGW build instructions](https://github.com/openssl/openssl/blob/openssl-3.5/NOTES-WINDOWS.md#native-builds-using-mingw).
+
 - OpenAL Soft is compiled with `-include cstdint` because its source relies on
   a transitive include removed in newer GCC.
 - FFmpeg uses portable C implementations with x86 and inline assembly disabled.

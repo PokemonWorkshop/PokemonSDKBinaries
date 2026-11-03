@@ -8,6 +8,8 @@ The suite checks:
 
 * Ruby version, platform and pointer size; loaded Ruby files remain in the payload.
 * Standard-library and bundled-gem loading, CSV/XML parsing, YAML, zlib and OpenSSL.
+* OpenSSL 3.5.9 headers/runtime and FFmpeg 6.1.6 runtime version, to catch packaging
+  of a different toolchain library despite matching source pins.
 * All four native bindings and the LiteCGSS fixed shader-pipeline constant.
 * FMOD initialization, version and PCM decoding; SFMLAudio PCM decoding.
 * sfeMovie PCM loading, duration and playback updates, exercising resampler setup.

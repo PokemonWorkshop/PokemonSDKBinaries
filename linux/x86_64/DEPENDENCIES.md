@@ -12,13 +12,15 @@ Docker builders verify the hashes again before extraction.
 
 ## Library versions
 
-The following version-selection notes were recorded on 2026-09-13. Descriptions
-such as "current" refer to that selection date, not to future upstream releases.
+Versions below match the source lock. The original selection notes were
+recorded on 2026-09-13; subsequent patch updates retain the selected branches
+and compatibility constraints. Descriptions such as "current" refer to the
+original review rather than a claim about the latest upstream release.
 
 | Dependency | Version | Selection |
 | --- | --- | --- |
 | Ruby | 3.4.10 | Current 3.4 patch release; retain the application ABI |
-| OpenSSL | 3.5.8 | Current 3.5 LTS release, supported until April 2030 |
+| OpenSSL | 3.5.9 | Retain the 3.5 LTS branch, supported until April 2030 |
 | libyaml | 0.2.5 | Current stable release; exclude the 0.2.6 release candidate |
 | zlib | 1.3.2 | Current stable release |
 | libffi | 3.8.0 | Current stable release |
@@ -63,6 +65,13 @@ Ruby and SFML major upgrades require coordinated ABI/API validation. FFmpeg
 retains the 6.x library ABI. FMOD remains at the configured 2.02.20 SDK used by
 RubyFMOD. Updating OpenAL requires validating the baseline compiler/toolchain;
 the recorded 1.24.3 build failed on constexpr code.
+
+Shared bundled libraries now use these versions on all three platforms. Windows
+builds OpenSSL 3.5.9 from the same source archive; macOS keeps its OS-provided
+OpenAL, zlib and libffi. The
+[pin checker](../../.github/scripts/check-dependency-pins.py) compares source
+archives and matching Windows package versions before CI builds. Build-tool
+and OS-provided library versions remain platform-specific.
 
 Upstream release references: [Ruby](https://www.ruby-lang.org/en/downloads/),
 [OpenSSL](https://openssl-library.org/source/), [libyaml](https://github.com/yaml/libyaml/releases),
