@@ -3,21 +3,18 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 configuration="${1:?Usage: fetch-sources.sh config/<platform>.conf}"
 source "$ROOT/$configuration"
+source "$ROOT/.github/scripts/fetch-source-archive.sh"
 mkdir -p "$ROOT/sources"
 
-# Native macOS dependencies use archives; Linux dependencies are fetched by
-# the pinned Docker builders. Component checkouts follow the same path below.
+# All platforms fetch locked archives here; builders verify them again before
+# extraction. Component checkouts follow the same path below.
 lock="$ROOT/${configuration%.conf}-sources.lock"
 if [[ -f "$lock" ]]; then
   mkdir -p "$ROOT/sources/archives"
   while read -r name checksum url; do
     [[ -z "$name" || "$name" == \#* ]] && continue
     archive="$ROOT/sources/archives/$name.tar.${url##*.}"
-    if [[ ! -f "$archive" ]]; then
-      curl -fLsS --retry 3 --connect-timeout 30 --max-time 600 "$url" -o "$archive.tmp"
-      mv "$archive.tmp" "$archive"
-    fi
-    printf '%s  %s\n' "$checksum" "$archive" | shasum -a 256 -c -
+    fetch_source_archive "$checksum" "$url" "$archive"
   done < "$lock"
 fi
 

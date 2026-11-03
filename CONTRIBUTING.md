@@ -70,6 +70,16 @@ aside before fetching again. Otherwise a cached archive from another target can
 fail the new lock's checksum check. Source checkouts are disposable build inputs:
 builders apply patches and refresh binding headers there.
 
+Source archives are checksum-verified before being moved into the download
+cache. Downloads retry connection/TLS failures as well as transient HTTP errors,
+with a bounded retry budget. If Ruby's CDN fails, the fetcher tries the same
+release path at `ftp.ruby-lang.org`; FFmpeg release downloads fall back to
+MacPorts' source mirror. Both alternatives must match the original locked
+SHA-256. A checksum mismatch fails immediately; partial or mismatched downloads
+are not cached. Existing cached archives are also verified before use. The
+downloader requires curl 7.71 or later for `--retry-all-errors`, available on the
+configured CI runners and private Windows toolchain.
+
 Platform `.conf` assignments take precedence over environment values when a
 script sources that configuration. Paths such as `OUTPUT_DIR` and `ARCHIVE_PATH`
 remain caller settings where the corresponding script supports them.

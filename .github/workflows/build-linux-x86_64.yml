@@ -35,8 +35,10 @@ jobs:
           p7zip-full patchelf python3-requests libasound2t64 libx11-6 libxcursor1
           libxi6 libxrandr2 libgl1
 
-      - name: Check shared dependency pins
-        run: python3 .github/scripts/check-dependency-pins.py
+      - name: Check shared dependency pins and source downloader
+        run: |
+          python3 .github/scripts/check-dependency-pins.py
+          python3 tests/test_source_download.py
 
       - name: Read Linux release configuration
         run: sed -n '/^[A-Za-z_][A-Za-z0-9_]*=/p' config/linux-x86_64.conf >> "$GITHUB_ENV"

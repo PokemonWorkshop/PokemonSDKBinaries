@@ -19,8 +19,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Check shared dependency pins
-        run: python3 .github/scripts/check-dependency-pins.py
+      - name: Check shared dependency pins and source downloader
+        run: |
+          python3 .github/scripts/check-dependency-pins.py
+          python3 tests/test_source_download.py
       - name: Bootstrap checksum-pinned build tools
         run: |
           bash macos/arm64/bootstrap-tools.sh

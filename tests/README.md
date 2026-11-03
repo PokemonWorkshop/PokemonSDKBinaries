@@ -1,5 +1,20 @@
 # Shared runtime functional tests
 
+## Source downloader regression tests
+
+From the repository root on Linux or macOS, run:
+
+```bash
+python3 tests/test_source_download.py
+```
+
+These tests simulate successful downloads, a Ruby CDN DNS failure, FFmpeg
+timeouts/TLS resets, alternate-host fallback, checksum failures and cached
+archives without using the network.
+Linux and macOS build workflows run them before fetching sources.
+
+## Packaged runtime tests
+
 `runtime-functional.rb` is packaged at `lib/psdk-runtime/` on all three
 platforms, alongside `sfemovie-texture.rb`. Each release verifier runs this
 same suite from its relocated payload, using only the bundled Ruby/runtime.
