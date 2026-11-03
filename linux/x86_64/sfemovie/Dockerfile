@@ -34,8 +34,6 @@ RUN source /opt/psdk/locked-source.sh \
  && rm -rf /tmp/psdk-src/ffmpeg /opt/psdk/archives
 
 COPY linux/x86_64/sfemovie/entrypoint.sh /usr/local/bin/sfemovie-entrypoint.sh
-COPY linux/x86_64/sfemovie/quiet-attached-pictures.patch /opt/sfemovie/quiet-attached-pictures.patch
-COPY macos/arm64/sfemovie-channel-layout.patch /opt/sfemovie/sfemovie-channel-layout.patch
 RUN chmod +x /usr/local/bin/sfemovie-entrypoint.sh
 
 ENTRYPOINT ["/usr/local/bin/sfemovie-entrypoint.sh"]

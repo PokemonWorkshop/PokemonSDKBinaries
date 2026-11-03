@@ -73,14 +73,6 @@ graphics() {
 }
 movie() {
   local cgss="$SOURCES/litergss/external/litecgss"
-  local fix="$ROOT/macos/arm64/sfemovie-channel-layout.patch"
-  if ! patch -f --dry-run -R -d "$SOURCES/sfemovie" -p1 < "$fix" >/dev/null 2>&1; then
-    patch -f -d "$SOURCES/sfemovie" -p1 < "$fix"
-  fi
-  fix="$ROOT/windows/x86/sfemovie-texture-lifetime.patch"
-  if ! patch -f --dry-run -R -d "$SOURCES/sfemovie" -p1 < "$fix" >/dev/null 2>&1; then
-    patch -f -d "$SOURCES/sfemovie" -p1 < "$fix"
-  fi
   cmake -S "$SOURCES/sfemovie" -B "$WORK/build/sfemovie" "${CMAKE_ARGS[@]}" \
     -DSFEMOVIE_ENABLE_ASS_SUBTITLES=ON -DSFEMOVIE_BUILD_UNIT_TESTS=OFF -DSFEMOVIE_BUILD_DOC=OFF \
     "-DSFML_ROOT=$PREFIX" "-DFFMPEG_ROOT=$PREFIX" "-DLIBASS_ROOT=$PREFIX" \

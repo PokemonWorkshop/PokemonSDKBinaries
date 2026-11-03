@@ -24,7 +24,12 @@ No `DYLD_LIBRARY_PATH` is needed. The legacy `clean_load_path` require remains.
 
 ## Local build
 
-Use an Apple Silicon Mac with Xcode or Command Line Tools. From the repo:
+Use an Apple Silicon Mac with Xcode or Command Line Tools.
+
+Use a fresh `sources/` directory when switching targets or source locks; see
+the shared [workspace and configuration conventions](../../README.md#workflow-and-script-conventions).
+
+Run from the repository root:
 
 ```bash
 bash macos/arm64/bootstrap-tools.sh
@@ -70,7 +75,7 @@ Set `JOBS` to limit compilation concurrency; set `SEVENZIP` to an absolute `7zz`
 path when necessary. Native validation needs WindowServer/OpenGL and CoreAudio
 access; restricted execution sandboxes may block these services.
 
-## New files and their purpose
+## Build tooling
 
 Paths are relative to this repository. Existing upstream `extconf.rb`, Rakefiles
 and CMake files are retained. There are no replacement extension definitions or
@@ -82,29 +87,29 @@ CMake projects.
 | `config/macos-arm64-sources.lock` | Source archive URLs and SHA-256 hashes. |
 | `config/macos-arm64-tools.lock` | Fixed build-tool downloads and SHA-256 hashes. |
 | `macos/arm64/bootstrap-tools.sh` | Private pinned build tools; archive-only mode installs just 7-Zip. |
-| `.github/scripts/fetch-sources.sh` | Shared Linux/macOS pinned component fetching; also verifies macOS dependency archives. Replaces macOS `fetch.sh` and inline Linux checkout code. |
-| `.github/scripts/prepare-sfemovie-ruby.sh` | Shared Linux/macOS preparation of disposable Ruby binding checkouts: links matching pinned LiteRGSS/LiteCGSS headers. |
-| `tests/sfemovie-texture.rb` | Generates an uncompressed green AVI and reference PNG; checks actual movie pixels, Bitmap subclasses, snapshots and disposed/uninitialized objects. Called by macOS smoke verification. |
+| `.github/scripts/fetch-sources.sh` | Fetches pinned component checkouts and verifies dependency archives for all three platforms. |
+| `.github/scripts/prepare-sfemovie-ruby.sh` | Prepares disposable Ruby binding checkouts on all three platforms: copies matching LiteRGSS headers and links matching LiteCGSS headers. |
+| `tests/sfemovie-texture.rb` | Generates an uncompressed green AVI and reference PNG; checks actual movie pixels, Bitmap subclasses, snapshots and disposed/uninitialized objects in the shared suite on all three platforms. |
 | `macos/arm64/build.sh` | Runs upstream configure/CMake/extconf builds with ARM64/macOS 11 flags; isolates dependencies; builds Ruby, SFML and LiteCGSS once. |
-| `macos/arm64/sfemovie-channel-layout.patch` | Corrects two FFmpeg resampler option names in the temporary checkout; details below. |
-| `macos/arm64/assemble-release.sh` | Shell file assembly and optional archiving, matching Linux's entry point and environment-variable interface. Replaces assembly in `package.py`. |
-| `macos/arm64/mach_o.py` | Binary relocation, signing, symlink normalization and portability audits extracted from `package.py`; no file assembly or source discovery. |
+| `macos/arm64/assemble-release.sh` | Assembles runtime files and optionally archives them, using `OUTPUT_DIR` and `ARCHIVE_PATH`. |
+| `macos/arm64/mach_o.py` | Relocates and signs binaries, normalizes symlinks and audits portability. |
 | `macos/arm64/setup.sh` | Sourceable legacy launcher interface for relocated Ruby 3.4. |
-| `macos/arm64/clean_load_path.rb` | Legacy require target; Ruby and setup.sh now handle path isolation. |
-| `macos/arm64/verify-release.sh` | Renamed from `verify.sh` to match Linux; audits and relocates the package to a path containing spaces and runs tests with a clean environment. |
-| `macos/arm64/smoke.rb` | macOS adapter for the packaged shared functional suite in `tests/runtime-functional.rb`; coverage is documented in `tests/README.md`. |
-| `macos/arm64/archive-release.sh` | Renamed from `archive.sh`; assembler helper that creates `.7z`, tests its extracted contents and writes the SHA-256 sidecar. |
+| `macos/arm64/clean_load_path.rb` | Legacy require target, also copied into Windows packages; Ruby and setup.sh handle macOS path isolation. |
+| `macos/arm64/verify-release.sh` | Audits and relocates the package to a path containing spaces, then runs tests with a clean environment. |
+| `macos/arm64/smoke.rb` | Repository-side macOS adapter that runs the packaged shared functional suite; coverage is documented in `tests/README.md`. |
+| `macos/arm64/archive-release.sh` | Creates `.7z`, tests its extracted contents and writes the internal SHA-256 sidecar. |
 | `macos/arm64/extract-fmod.sh` | Unpacks an authorized FMOD installer without a system-wide installation. |
 | `.github/workflows/build-macos-arm64.yml` | Builds on ARM64 macOS 14, verifies the archive on fresh macOS 15/26 runners and uploads runtime artifacts. |
-| `.github/workflows/build-linux-x86_64.yml` | Linux build extracted from the old combined workflow, using the same reusable workflow structure as macOS. |
-| `.github/workflows/release.yml` | Shared protected-tag entry point and publisher; replaces `release-linux-x86_64.yml`. |
-| `linux/x86_64/extract-fmod.sh` | Linux SDK extraction moved out of inline YAML, matching the macOS shell entry point. |
+| `.github/workflows/build-linux-x86_64.yml` | Reusable Linux build and fresh-archive verification workflow. |
+| `.github/workflows/release.yml` | Authorizes protected-tag releases, calls all three platform workflows and publishes their verified archives plus `version.json`. |
+| `linux/x86_64/extract-fmod.sh` | Extracts the authorized Linux SDK download. |
 | `macos/arm64/README.md` | Reproduction, compatibility, validation and file rationale. |
 
-The existing downloader gains a macOS entry. The existing protected-tag release
-workflow calls the macOS workflow and waits for both platforms before publishing
-both archives. Read-only build permissions and SHA-pinned actions remain.
-There is no additional tag trigger or independent macOS publisher.
+The shared downloader supports Linux, macOS and Windows. The protected-tag
+release workflow waits for all three platforms to finish their build and
+verification jobs before publishing. Build workflows have read-only permissions
+and actions are pinned by commit. `release.yml` is the only tag entry point and
+publisher.
 
 ## Upstream build adjustments
 
@@ -125,17 +130,26 @@ prints `mkmf.log` before CI removes the temporary SDK.
    to `av_opt_set_chlayout` using `in_channel_layout`/`out_channel_layout`. In
    FFmpeg 6.0 these names identify deprecated integer mask fields. The setter
    writes to the wrong fields and corrupts the resampler configuration. The
-   patch changes the names to `in_chlayout`/`out_chlayout`. Actual audio loading
-   reproduced the failure; simply loading the extension did not. Submit this
-   upstream and replace the patch with a commit pin once merged. Linux CI
-   reproduced the same failure; all three platform builders apply this patch.
-4. **SFEMovie texture ABI:** upstream commit `5f42b7b3dabc641d73c6fe533f08d9d69e3e4377` includes the TypedData access, disposed-object checks, snapshot initialization and header configuration fixes. All platforms pin this commit; no local texture patch is needed. The preparation helper still links matching LiteCGSS headers, and builders supply the LiteRGSS include directory.
+   upstream correction changes the names to `in_chlayout`/`out_chlayout`.
+   Actual audio loading reproduced the failure; simply loading the extension
+   did not. All three platforms now pin native sfeMovie revision
+   `0fbc65d67a1bb02b233c1c527dffff04dd38fe67`, which includes this correction
+   and the fallback-texture lifetime fix. Local patches are no longer needed.
+4. **SFEMovie texture ABI:** all three platform configurations currently pin the
+   Ruby binding to `d90a4fbae5d7973e8475f97f5498de13fb6f203a`. The binding's
+   TypedData access, disposed-object handling and snapshots are exercised by the
+   shared texture regression. The preparation helper copies matching LiteRGSS
+   headers and links matching LiteCGSS headers; builders also supply the LiteRGSS
+   include directory. The native sfeMovie revision also ties fallback texture
+   lifetime to its movie, addressing an observed Windows/NVIDIA shutdown crash
+   without a local patch.
 
 Ruby configure options disable DTrace/JIT build dependencies and optional native
 dbm/gdbm/readline extensions; Ruby 3.4's Reline is still bundled. Font rendering
 uses source-built FreeType/HarfBuzz/FriBidi/libass with Apple's CoreText provider.
-FFmpeg uses the Linux feature selection with generic ARM64 code and does not
-enable GPL/nonfree codecs.
+FFmpeg uses generic ARM64 code and shared libraries, disables autodetection and
+networking, and enables PNG/mov_text decoding. It does not enable
+GPL/nonfree codecs. macOS pins FFmpeg 6.0; Linux pins 6.1.6.
 
 ## Validation and limits
 
@@ -146,15 +160,17 @@ checked again. An explicit smoke-test completion marker catches premature exits.
 Library symlink chains are flattened to direct relative links while retaining
 all aliases, so 7-Zip's safe extraction accepts the archive.
 
-The movie regression reproduced `expected Data` with the previous macOS bundle
-and passed with the corrected Ruby 3.4.10 bundle. It compares exported texture
-pixels with a reference image, including a Bitmap subclass like PSDK's Texture.
-The earlier audio-only movie smoke did not exercise this interface. The shared
-upstream fix is pinned for Linux builds too, but its Linux execution still needs CI
-validation; the graphical regression currently runs in macOS verification.
+The shared movie regression compares exported texture pixels with a reference
+image, including a Bitmap subclass like PSDK's Texture. It also checks snapshots
+and disposed/uninitialized textures. All three platform verifiers run this
+regression through `tests/runtime-functional.rb`; audio-only loading does not
+exercise these interfaces. The macOS verifier requires a completion marker to
+detect premature exits.
 
 The deployment target is a compatibility constraint, not proof of testing on
-every OS/hardware model. Hosted CI covers macOS 14, 15 and 26. macOS 11/12/13
+every OS/hardware model. The hosted workflow is configured to build and test on
+macOS 14 and verify extracted archives on macOS 15 and 26. Results must be checked
+for the revision being released. macOS 11/12/13
 machines and a complete Pokémon SDK game still need testing before claiming
 coverage of every Apple Silicon macOS release.
 

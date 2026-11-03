@@ -24,5 +24,6 @@ runs the suite through both ruby.exe and rubyw.exe, with RubyGems enabled and
 with PSDK's gems-disabled flags. These extra launcher checks are intentional.
 
 The Linux CI run reproduced the resampler failure when opening the generated
-PCM fixture. All three builders now apply `sfemovie-channel-layout.patch`.
+PCM fixture. The pinned native sfeMovie revision includes the upstream
+channel-layout correction, so builders no longer apply a local patch.
 The fixture remains a regression test for this failure.

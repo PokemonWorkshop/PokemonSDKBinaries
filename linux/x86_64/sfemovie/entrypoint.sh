@@ -21,11 +21,6 @@ cleanup() {
 trap cleanup EXIT
 
 cp -a /source/. "${source_dir}"
-# FFmpeg 6 AVChannelLayout setters require the new option names on Linux too.
-patch -d "${source_dir}" -p1 < /opt/sfemovie/sfemovie-channel-layout.patch
-if [[ -f /opt/sfemovie/quiet-attached-pictures.patch ]]; then
-  patch -d "${source_dir}" -p1 < /opt/sfemovie/quiet-attached-pictures.patch
-fi
 
 cmake -S "${source_dir}" -B "${work_dir}/build" \
   -DCMAKE_BUILD_TYPE=Release \

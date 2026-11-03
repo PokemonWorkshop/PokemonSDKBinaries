@@ -52,6 +52,9 @@ Each stage reports progress and saves `extract-msys2.*.log` diagnostics, which
 CI uploads on failure. An extraction completion marker prevents a partial
 extraction from being mistaken for a usable toolchain.
 
+Use a fresh `sources/` directory when switching targets or source locks; see
+the shared [workspace and configuration conventions](../../README.md#workflow-and-script-conventions).
+
 Run from the repository root in PowerShell:
 
 ```powershell
@@ -113,10 +116,11 @@ for diagnostics.
   are built from source. Other prerequisites come from the locked packages.
 * FFmpeg uses portable C implementations instead of incompatible old inline
   assembly. Its configuration retains feature flags with normalized paths.
-* The SFEMovie TypedData fix is pinned upstream; the channel-layout patch remains, together
-  with the explicit matching LiteRGSS include path.
-* `sfemovie-texture-lifetime.patch` fixes an observed NVIDIA OpenGL shutdown
-  crash by tying the fallback texture's lifetime to its movie.
+* The SFEMovie TypedData fix is pinned in the Ruby binding; the builder retains
+  the explicit matching LiteRGSS include path.
+* Native sfeMovie includes the upstream channel-layout correction and fallback
+  texture lifetime fix for an observed NVIDIA OpenGL shutdown crash. Neither
+  requires a local patch.
 
 ## Validation and CI
 
@@ -136,8 +140,9 @@ They require an OpenGL-capable session. All launch modes check normal shutdown.
 All platforms run the same [functional suite](../../tests/README.md).
 
 The Windows workflow uploads the runtime archive and checksum, then downloads
-and tests both bundled executables on a fresh Windows runner. The archive and
-checksum are included in the protected-tag release. The release waits
+and tests both bundled executables on a fresh Windows runner. The protected-tag
+release publishes `Windows.7z` and its SHA-1 hash in `version.json`; the SHA-256
+sidecar remains an internal CI artifact. The release waits
 for successful Windows, Linux and macOS builds and verification.
 
 CI uses `FMOD_USER` and `FMOD_PASSWORD` to download

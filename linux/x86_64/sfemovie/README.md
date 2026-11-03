@@ -15,10 +15,13 @@ Fetch sources and build LiteRGSS with `linux/x86_64/litergss/build.sh` first,
 then run from this repository (the Linux workflow performs these steps):
 
 ```sh
-RUBY_VERSION=3.4.10 \
 SOURCE_DIR=/path/to/sfeMovie \
 linux/x86_64/sfemovie/build.sh
 ```
+
+The builder reads `RUBY_VERSION` and `FFMPEG_VERSION` from
+`config/linux-x86_64.conf`, overriding environment values for those settings.
+Use the same configuration for the preceding LiteRGSS build.
 
 Set `OUTPUT_DIR` to choose an empty output directory. The result contains the
 native sfeMovie library, the FFmpeg libraries it uses, SFML, and any required

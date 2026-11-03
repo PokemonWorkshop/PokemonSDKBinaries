@@ -8,6 +8,3 @@
 !linux/x86_64/
 !linux/x86_64/sfemovie/
 !linux/x86_64/sfemovie/**
-!macos/
-!macos/arm64/
-!macos/arm64/sfemovie-channel-layout.patch

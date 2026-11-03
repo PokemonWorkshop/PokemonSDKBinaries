@@ -145,12 +145,6 @@ components() {
     make -j"$JOBS")
   # Use the upstream framework target, then stage its Mach-O image as a
   # private dylib so the existing Ruby extconf can link with -lsfeMovie.
-  local movie_patch="$ROOT/macos/arm64/sfemovie-channel-layout.patch"
-  if patch -f --dry-run -R -d "$SOURCES/sfemovie" -p1 < "$movie_patch" >/dev/null 2>&1; then
-    echo 'sfeMovie channel layout fix is already applied.'
-  else
-    patch -f -d "$SOURCES/sfemovie" -p1 < "$movie_patch"
-  fi
   cmake -S "$SOURCES/sfemovie" -B "$WORK/build/sfemovie" "${CMAKE_ARGS[@]}" \
     -DSFEMOVIE_ENABLE_ASS_SUBTITLES=ON -DSFEMOVIE_BUILD_UNIT_TESTS=OFF -DSFEMOVIE_BUILD_DOC=OFF \
     "-DSFML_ROOT=$PREFIX" "-DFFMPEG_ROOT=$PREFIX"

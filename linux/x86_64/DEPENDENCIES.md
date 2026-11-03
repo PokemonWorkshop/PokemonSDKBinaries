@@ -23,7 +23,7 @@ binding reuse that image; the native sfeMovie image inherits it too.
 | Ogg | 1.3.6 | Current stable release |
 | Vorbis | 1.3.7 | Current stable release |
 | FLAC | 1.5.0 | Current stable release |
-| OpenAL Soft | 1.23.1 | Baseline compiler compatibility; 1.24.3 failed on constexpr code in the user's Linux build |
+| OpenAL Soft | 1.23.1 | Baseline compiler compatibility; a previous Linux build with 1.24.3 failed on constexpr code |
 | FreeType | 2.14.3 | Current stable release |
 | HarfBuzz | 14.4.0 | Current stable release |
 | FriBidi | 1.0.16 | Current stable release |
@@ -68,8 +68,14 @@ OpenGL, X11, ALSA, and the C++ runtime continue to come from the player's system
 OpenSSL's shared libraries are bundled, while `setup.sh` selects the host CA
 bundle and respects an explicitly set `SSL_CERT_FILE`.
 
-The user ran the Linux workflow with `act`: assembly and the shared functional
-suite passed in the glibc 2.28 container. The coding agent ran no builds or tests.
+## Validation evidence
+
+A previous local `act` run was reported to pass assembly and the shared
+functional suite in the glibc 2.28 container. That report did not identify a
+revision or execution date, so it does not establish validation of later changes.
+The workflow defines build and fresh-archive verification jobs; their presence
+alone does not establish that a particular revision passed hosted CI.
+
 Local runs skip GitHub artifact upload and retain `dist/Linux.7z`.
 Run the Linux `act workflow_call` command in the repository README to exercise
 the complete build and existing runtime checks.

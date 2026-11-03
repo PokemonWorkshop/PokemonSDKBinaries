@@ -31,5 +31,9 @@ It intentionally does not duplicate `libruby.so.3.4`: the final release gets
 that shared library from LiteRGSS's embedded Ruby payload. The C++ runtime and
 the host audio stack remain host-provided.
 
-For another embedded Ruby version, build LiteRGSS for that version first, then
-pass the same value as `RUBY_VERSION` here.
+For another embedded Ruby version, update `config/linux-x86_64.conf` and the
+matching source lock, then rebuild LiteRGSS and pass the same version as
+`RUBY_VERSION` here. The LiteRGSS builder reads the configuration directly;
+setting its environment alone does not change its Ruby version. Coordinate
+the remaining platform and test changes described in
+[CONTRIBUTING.md](../../../CONTRIBUTING.md).

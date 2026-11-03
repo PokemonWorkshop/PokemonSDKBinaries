@@ -87,8 +87,8 @@ Normal branch pushes and pull requests do not run the release workflow.
 The same protected tag builds `macOS.7z` with Ruby **3.4.10** on Apple
 Silicon, and `Windows.7z` for 32-bit Windows. All three platforms must pass
 their checks before publication. See the
-[macOS build documentation](macos/arm64/README.md) for local commands, the purpose
-of each new file, upstream adjustments and compatibility-testing limits.
+[macOS build documentation](macos/arm64/README.md) for local commands, build
+tooling, upstream adjustments and compatibility-testing limits.
 
 ## Building locally
 
@@ -105,6 +105,11 @@ act workflow_call \
 
 `--bind` is required for this workflow because Docker build containers need access to component source directories created by `act`. Artifacts created by `act` are local test output; GitHub Releases are published only by GitHub Actions.
 
+The build job deletes `sources/`, `generated/` and `dist/` before starting.
+With `--bind`, these are directories in your local checkout. Move any source
+edits or build results you want to keep outside those directories before running
+the command.
+
 The command runs both `build` and `verify`. Local runs skip artifact upload and
 download, passing the archive through the shared `dist/` directory. Add `-j build`
 only when you want to omit the separate archive verification job.
@@ -116,9 +121,11 @@ changing a GitHub Release, add:
 --env RELEASE_DRY_RUN=true
 ```
 
-The complete release also requires native macOS jobs; `act`'s Linux containers
-cannot run those jobs. The reusable Linux workflow can be tested independently
-with the command above.
+`RELEASE_DRY_RUN` only suppresses publication in the final job; it does not
+bypass protected-tag authorization or the platform builds and verification.
+The complete release also requires native macOS and Windows jobs; `act`'s Linux
+containers cannot run those jobs. The reusable Linux workflow can be tested
+independently with the command above.
 
 ### Workflow and script conventions
 
@@ -147,6 +154,27 @@ macOS uses native shell build stages; Windows uses a private, checksum-pinned
 MSYS2 toolchain. macOS retains `mach_o.py` for binary path rewriting, signature
 checks and safe symlink resolution. Its `archive-release.sh` helper tests archive
 extraction on macOS. Those operations are separate from shell file assembly.
+
+The scripts share `sources/`, including an archive cache whose filenames contain
+the dependency name and extension, but not its version or platform. When changing
+targets or source locks, use a fresh checkout or move the old `sources/` directory
+aside before fetching again. Otherwise a cached archive from another target can
+fail the new lock's checksum check. Source checkouts are disposable build inputs:
+builders apply patches and refresh binding headers there.
+
+Platform `.conf` assignments take precedence over environment values when a
+script sources that configuration. In particular, the Linux LiteRGSS and native
+sfeMovie builders read their Ruby version from `config/linux-x86_64.conf`.
+The Linux RubyFMOD and SFEMovie Ruby binding builders instead take `RUBY_VERSION`
+from the environment (RubyFMOD defaults to 3.4.10); it must match the LiteRGSS
+image. Paths such as `OUTPUT_DIR` and `ARCHIVE_PATH` remain caller settings where
+the corresponding script supports them.
+
+Windows assembly copies the shared legacy require target from
+`macos/arm64/clean_load_path.rb`. The shared binding-preparation script is used
+by all three platforms. The pinned native sfeMovie revision includes the
+channel-layout and fallback-texture lifetime fixes; no local patches are applied
+to native sfeMovie.
 
 ## Maintainer notes
 
@@ -186,6 +214,8 @@ The authenticated CI download approach was informed by the open-source [utopia-r
 See [CONTRIBUTING.md](CONTRIBUTING.md) for component-update guidelines and the
 requirements for adding an OS or architecture, including packaging, verification
 and release integration.
+
+See [TODO.md](TODO.md) for remaining documentation and maintainability work.
 
 ## License
 
