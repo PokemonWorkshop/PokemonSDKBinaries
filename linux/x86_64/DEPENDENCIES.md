@@ -1,16 +1,19 @@
-# Linux dependency policy
+# Linux dependencies
 
-`config/linux-x86_64-sources.lock` uses `name sha256 source-url`, like the macOS
-source lock. `.github/scripts/fetch-sources.sh` downloads and checks these archives;
-the Docker builders check the hashes again before extraction. No runtime source
-archive is selected through a moving `latest` URL.
+For commands, see [README.md](README.md). Build implementation details are in
+[BUILD-NOTES.md](BUILD-NOTES.md).
 
-The Linux workflow uses `litergss/build.sh` in this repository. It reuses the pinned
-LiteRGSS staging script, but owns the dependency builds instead of inheriting the
-upstream Dockerfile's old distribution libraries. RubyFMOD and SFEMovie's Ruby
-binding reuse that image; the native sfeMovie image inherits it too.
+## Pinned inputs
 
-## Source versions selected on 2026-09-13
+[config/linux-x86_64.conf](../../config/linux-x86_64.conf) pins component
+repositories and revisions. [The source lock](../../config/linux-x86_64-sources.lock)
+pins source archives by name, SHA-256 and URL. The shared fetcher verifies them;
+Docker builders verify the hashes again before extraction.
+
+## Library versions
+
+The following version-selection notes were recorded on 2026-09-13. Descriptions
+such as "current" refer to that selection date, not to future upstream releases.
 
 | Dependency | Version | Selection |
 | --- | --- | --- |
@@ -30,6 +33,37 @@ binding reuse that image; the native sfeMovie image inherits it too.
 | libass | 0.17.5 | Current stable release |
 | FFmpeg | 6.1.6 | Current 6.1 patch release; retain the 6.x library ABI |
 
+FMOD Core is 2.02.20. LiteRGSS2/LiteCGSS, RubyFMOD, SFMLAudio, native sfeMovie
+and its Ruby binding use the immutable component revisions in the configuration.
+
+## System dependencies
+
+OpenGL, X11, ALSA and the system C++ runtime remain host-provided. Fontconfig
+and its configuration, Expat, JPEG and ancillary build-distribution libraries
+follow AlmaLinux packages rather than independent source pins. The resolved
+builder inventory is not a list of files all included in the runtime.
+
+OpenSSL shared libraries are bundled. At launch, `setup.sh` selects the host CA
+bundle and respects an explicitly set `SSL_CERT_FILE`.
+
+## Build tools
+
+The manylinux base is pinned by digest and retains glibc 2.28. The builder runs
+`dnf upgrade --refresh` before installing tools and integration headers. GCC,
+CMake and other RPM tools therefore follow the build distribution. Portable
+libraries use `/usr/bin/gcc` and `/usr/bin/g++`.
+
+Ruby build gems are pinned separately as `RAKE_VERSION` (13.2.1) and
+`RAKE_COMPILER_VERSION` (1.3.1). This is not a full RPM/toolchain lock or a
+claim of byte-for-byte reproducibility.
+
+## Selection notes
+
+Ruby and SFML major upgrades require coordinated ABI/API validation. FFmpeg
+retains the 6.x library ABI. FMOD remains at the configured 2.02.20 SDK used by
+RubyFMOD. Updating OpenAL requires validating the baseline compiler/toolchain;
+the recorded 1.24.3 build failed on constexpr code.
+
 Upstream release references: [Ruby](https://www.ruby-lang.org/en/downloads/),
 [OpenSSL](https://openssl-library.org/source/), [libyaml](https://github.com/yaml/libyaml/releases),
 [zlib](https://zlib.net/), [libffi](https://github.com/libffi/libffi/releases),
@@ -38,44 +72,3 @@ Upstream release references: [Ruby](https://www.ruby-lang.org/en/downloads/),
 [HarfBuzz](https://github.com/harfbuzz/harfbuzz/releases),
 [FriBidi](https://github.com/fribidi/fribidi/releases),
 [libass](https://github.com/libass/libass/releases), [FFmpeg](https://ffmpeg.org/download.html).
-
-Ruby/SFML major upgrades and an OpenAL compiler/toolchain migration require separate
-compatibility work. FMOD remains the explicitly configured 2.02.20 SDK required
-by the existing RubyFMOD binding. Component Git revisions remain in
-`config/linux-x86_64.conf`, including SFMLAudio.
-
-## Distribution and host dependencies
-
-The manylinux base remains pinned by digest and retains glibc 2.28. The builder
-runs `dnf upgrade --refresh` before installing build tools and system integration
-headers. Fontconfig and its system configuration, Expat, JPEG, and ancillary
-distribution libraries follow AlmaLinux's maintained packages, rather than
-independent upstream source releases. Distribution build tools remain outside
-the runtime source lock; Ruby build gems are pinned separately as `RAKE_VERSION`
-and `RAKE_COMPILER_VERSION` in `config/linux-x86_64.conf`. This is not a complete RPM/toolchain lock or a
-claim of bit-for-bit reproducibility.
-
-A source-lock change invalidates the package-update Docker layer. To refresh
-distribution packages alone when reusing local Docker caches, discard the cached
-builder layers before the next local build.
-
-The released `lib/psdk-runtime/` directory records `linux-sources.lock` and
-`linux-distribution-packages.txt`. The latter is the full resolved builder RPM
-inventory, not a list of libraries all bundled into the game.
-
-Portable source libraries use the baseline `/usr/bin/gcc` and `/usr/bin/g++`.
-OpenGL, X11, ALSA, and the C++ runtime continue to come from the player's system.
-OpenSSL's shared libraries are bundled, while `setup.sh` selects the host CA
-bundle and respects an explicitly set `SSL_CERT_FILE`.
-
-## Validation evidence
-
-A previous local `act` run was reported to pass assembly and the shared
-functional suite in the glibc 2.28 container. That report did not identify a
-revision or execution date, so it does not establish validation of later changes.
-The workflow defines build and fresh-archive verification jobs; their presence
-alone does not establish that a particular revision passed hosted CI.
-
-Local runs skip GitHub artifact upload and retain `dist/Linux.7z`.
-Run the Linux `act workflow_call` command in the repository README to exercise
-the complete build and existing runtime checks.

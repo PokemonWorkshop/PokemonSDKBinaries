@@ -6,6 +6,80 @@ the resulting packages reproducible, relocatable and verifiable. Platform build
 commands belong in the platform documentation; this guide describes what a
 contribution needs to establish.
 
+## Getting started
+
+Choose the guide for the target you want to build:
+
+- [Linux x86-64](linux/x86_64/README.md), including local workflow execution
+- [macOS ARM64](macos/arm64/README.md), using native Apple tools
+- [Windows x86](windows/x86/README.md), using the private MSYS2 toolchain
+
+Make component changes in their upstream repositories first, then update this
+repository's pins and any required build adjustments. Run the affected platform
+checks described in its guide and report the environments and results with
+your contribution. Ordinary branch pushes and pull requests do not trigger the
+release workflow; contributors need to run those checks explicitly.
+
+For GitHub secrets, protected tags and publishing, see
+[RELEASING.md](RELEASING.md).
+
+Each platform directory uses the same documentation layout:
+
+| Document | Contents |
+| --- | --- |
+| `README.md` | Requirements, build commands, outputs, rebuilding, verification and compatibility limits |
+| `DEPENDENCIES.md` | Pinned inputs, library versions, system dependencies, build tools and selection notes |
+| `BUILD-NOTES.md` | Toolchain layout, native build adjustments, binary audits and compatibility limits |
+
+Keep those responsibilities consistent when updating a platform or adding one.
+Linux's component-level READMEs provide additional inputs for its separate
+builders.
+
+## Workflow and script conventions
+
+Platform tooling lives in `linux/x86_64/`, `macos/arm64/` and `windows/x86/`.
+The Linux directory includes its Docker builders and release scripts.
+
+`release.yml` is the only protected-tag entry point and the only publisher.
+It calls `build-linux-x86_64.yml`, `build-macos-arm64.yml` and
+`build-windows-x86.yml`, all reusable workflows with read-only permissions
+and explicit FMOD secrets.
+
+| Responsibility | Linux | macOS | Windows |
+| --- | --- | --- | --- |
+| Configuration | `config/linux-x86_64.conf` | `config/macos-arm64.conf` | `config/windows-x86.conf` |
+| Source fetching | `.github/scripts/fetch-sources.sh` | Same shared shell script | `windows/x86/run.ps1 fetch` |
+| Authorized SDK download | `.github/scripts/download_fmod.py` | Same shared Python script | `windows/x86/run.ps1 download-fmod` |
+| SDK extraction | `linux/x86_64/extract-fmod.sh` | `macos/arm64/extract-fmod.sh` | `windows/x86/download-fmod.sh` |
+| Assembly | `linux/x86_64/assemble-release.sh` | `macos/arm64/assemble-release.sh` | `windows/x86/run.ps1 assemble` |
+| Verification | `linux/x86_64/verify-release.sh` | `macos/arm64/verify-release.sh` | `windows/x86/verify-runtime.ps1` |
+
+Linux and macOS assemblers take `OUTPUT_DIR` and optional `ARCHIVE_PATH`, and refuse non-empty
+destinations. Their verifiers take `RELEASE_DIR`. Windows uses the commands and
+payload paths documented in its [build guide](windows/x86/README.md).
+Compilation remains platform-specific: Linux uses Docker component builders;
+macOS uses native shell build stages; Windows uses a private, checksum-pinned
+MSYS2 toolchain. macOS uses `mach_o.py` for binary path rewriting, signature
+checks and safe symlink resolution. Its `archive-release.sh` helper tests archive
+extraction on macOS. Those operations are separate from shell file assembly.
+
+The scripts share `sources/`, including an archive cache whose filenames contain
+the dependency name and extension, but not its version or platform. When changing
+targets or source locks, use a fresh checkout or move the old `sources/` directory
+aside before fetching again. Otherwise a cached archive from another target can
+fail the new lock's checksum check. Source checkouts are disposable build inputs:
+builders apply patches and refresh binding headers there.
+
+Platform `.conf` assignments take precedence over environment values when a
+script sources that configuration. Paths such as `OUTPUT_DIR` and `ARCHIVE_PATH`
+remain caller settings where the corresponding script supports them.
+
+Windows assembly copies the shared legacy require target from
+`macos/arm64/clean_load_path.rb`. The shared binding-preparation script is used
+by all three platforms. The pinned native sfeMovie revision includes the
+channel-layout and fallback-texture lifetime fixes; no local patches are applied
+to native sfeMovie.
+
 ## Changes to existing components
 
 Merge component changes upstream first, then update immutable repository URLs
@@ -112,7 +186,7 @@ needed after extraction, including extraction into a path containing spaces.
 Ship component build information and applicable third-party license notices.
 Only the required FMOD runtime belongs in the payload; SDK headers, static/import
 libraries and installers remain build inputs. Follow the existing
-[FMOD runtime and licensing notes](README.md#fmod-runtime-and-licensing).
+[FMOD runtime and licensing notes](LICENSING.md#fmod-runtime-and-licensing).
 Document signing requirements and distinguish runtime build signing from any
 game/application distribution signing or notarization.
 
