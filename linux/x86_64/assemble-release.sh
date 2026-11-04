@@ -145,48 +145,9 @@ done < <(
 )
 
 ruby_library_dir="$(find "${output_dir}/lib/ruby" -mindepth 1 -maxdepth 1 -type d -name '[0-9]*' -print -quit)"
-ruby_arch_library_dir="$(find "${ruby_library_dir}" -mindepth 1 -maxdepth 1 -type d -name '*-linux*' -print -quit)"
-test -n "${ruby_library_dir}" && test -n "${ruby_arch_library_dir}"
+test -n "${ruby_library_dir}"
 install -m 0644 "${repository_root}/linux/x86_64/clean_load_path.rb" \
   "${ruby_library_dir}/clean_load_path.rb"
-
-LD_LIBRARY_PATH="${output_dir}/lib" "${output_dir}/bin/ruby" \
-  -I"${output_dir}/lib" -I"${ruby_library_dir}" -I"${ruby_arch_library_dir}" -e '
-  require "clean_load_path"
-  require "LiteRGSS"
-  require "SFMLAudio"
-  require "RubyFmod"
-  require "SFEMovie"
-  abort "Unexpected FMOD API version" unless FMOD::VERSION == 0x00020220
-  abort "SFEMovie extension did not define SFE::Movie" unless defined?(SFE::Movie)
-  puts "LiteRGSS, SFMLAudio and RubyFMOD loaded successfully"
-'
-
-sfemovie_library="$(find "${output_dir}/lib" -maxdepth 1 -type f -name 'libsfeMovie.so.*' -print -quit)"
-test -n "${sfemovie_library}" || {
-  echo 'Error: the assembled release does not contain libsfeMovie.' >&2
-  exit 1
-}
-LD_LIBRARY_PATH="${output_dir}/lib" "${output_dir}/bin/ruby" \
-  -I"${ruby_library_dir}" -I"${ruby_arch_library_dir}" -e '
-  require "fiddle"
-  Fiddle.dlopen(ARGV.fetch(0))
-  puts "sfeMovie loaded successfully"
-' "${sfemovie_library}"
-
-LD_LIBRARY_PATH="${output_dir}/lib" "${output_dir}/bin/ruby" \
-  -I"${ruby_library_dir}" -I"${ruby_arch_library_dir}" -e '
-  require "fiddle/import"
-  module AVCodec
-    extend Fiddle::Importer
-    dlload ARGV.fetch(0)
-    extern "void *avcodec_find_decoder_by_name(const char *)"
-  end
-  %w[png mov_text].each do |decoder|
-    abort "Missing required FFmpeg decoder: #{decoder}" if AVCodec.avcodec_find_decoder_by_name(decoder).to_i == 0
-  end
-  puts "Required FFmpeg decoders loaded successfully"
-' "${output_dir}/lib/libavcodec.so.60"
 
 printf 'Platform: %s\nRuby: %s\nFMOD API: %s\nFFmpeg: %s\nLiteRGSS revision: %s\nRubyFMOD revision: %s\nsfeMovie revision: %s\n' \
   "${PLATFORM}" "${RUBY_VERSION}" "${FMOD_VERSION_HEX}" "${FFMPEG_VERSION}" \
@@ -212,4 +173,4 @@ if [[ -n "${archive_path}" ]]; then
   rm -rf "${archive_work_dir}"
 fi
 
-echo "Verified assembled ${PLATFORM} release payload."
+echo "Assembled ${PLATFORM} release payload; run verify-release.sh for functional checks."

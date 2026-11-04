@@ -24,6 +24,7 @@ abort 'RubyGems unexpectedly enabled' if ENV['PSDK_EXPECT_NO_GEMS'] == '1' && de
   puts "Loading #{name}"
   require name
 end
+require 'clean_load_path' unless platform == 'windows'
 abort 'YAML failed' unless Psych.safe_load('test: 42')['test'] == 42
 abort 'CSV failed' unless CSV.parse("name,value\nPSDK,42\n", headers: true)[0]['value'] == '42'
 abort 'REXML failed' unless REXML::Document.new('<psdk>42</psdk>').root.text == '42'
@@ -36,6 +37,8 @@ abort "Unexpected OpenSSL runtime: #{OpenSSL::OPENSSL_LIBRARY_VERSION}" unless O
 abort 'Missing graphics API' unless defined?(LiteRGSS::Bitmap)
 abort 'Expected LiteCGSS fixed shader pipeline' unless LiteRGSS::Shader::LITECGSS_SHADER_FIXED_PIPELINE == true
 abort 'Missing audio API' unless defined?(SFMLAudio::Music)
+abort 'Unexpected FMOD API version' unless FMOD::VERSION == 0x00020220
+abort 'Missing movie API' unless defined?(SFE::Movie)
 FMOD::System.setOutput(FMOD::OUTPUTTYPE::NOSOUND)
 FMOD::System.init(8, FMOD::INIT::NORMAL)
 abort 'FMOD runtime version mismatch' unless FMOD::System.getVersion == 0x00020220

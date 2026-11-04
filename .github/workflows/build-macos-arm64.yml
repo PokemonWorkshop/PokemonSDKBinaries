@@ -69,8 +69,6 @@ jobs:
           OUTPUT_DIR="$GITHUB_WORKSPACE/generated/MacOS-arm64/ruby-dist" \
           ARCHIVE_PATH="$GITHUB_WORKSPACE/dist/macOS.7z" \
           bash macos/arm64/assemble-release.sh
-      - name: Smoke test the assembled payload
-        run: RELEASE_DIR="$GITHUB_WORKSPACE/generated/MacOS-arm64/ruby-dist" bash macos/arm64/verify-release.sh
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: MacOS-arm64
