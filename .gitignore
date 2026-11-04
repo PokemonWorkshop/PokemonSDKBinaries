@@ -1,0 +1,5 @@
+sources/
+generated/
+dist/
+__pycache__/
+*.py[cod]

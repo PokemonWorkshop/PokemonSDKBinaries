@@ -1,0 +1,151 @@
+name: Build Linux x86-64
+
+on:
+  workflow_call:
+    secrets:
+      FMOD_USER:
+        required: true
+      FMOD_PASSWORD:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Prepare clean CI workspace
+        run: |
+          # Hosted runners are fresh.  act --bind intentionally reuses the
+          # local workspace, so clear only CI-generated directories here.
+          rm -rf sources generated dist
+          mkdir -p sources generated dist
+
+      - name: Install release tools
+        run: >-
+          sudo apt-get update && sudo apt-get install --yes
+          p7zip-full patchelf python3-requests libasound2t64 libx11-6 libxcursor1
+          libxi6 libxrandr2 libgl1
+
+      - name: Check shared dependency pins and source downloader
+        run: |
+          python3 .github/scripts/check-dependency-pins.py
+          python3 tests/test_source_download.py
+
+      - name: Read Linux release configuration
+        run: sed -n '/^[A-Za-z_][A-Za-z0-9_]*=/p' config/linux-x86_64.conf >> "$GITHUB_ENV"
+
+      - name: Fetch pinned component sources
+        run: bash .github/scripts/fetch-sources.sh config/linux-x86_64.conf
+
+      - name: Fetch authorized FMOD Core SDK
+        env:
+          FMOD_USER: ${{ secrets.FMOD_USER }}
+          FMOD_PASSWORD: ${{ secrets.FMOD_PASSWORD }}
+        run: |
+          python3 .github/scripts/download_fmod.py \
+            --version "$FMOD_DOWNLOAD_VERSION" \
+            --platform linux \
+            --output "$RUNNER_TEMP/psdk-fmod-download.tar.gz"
+
+          bash linux/x86_64/extract-fmod.sh "$RUNNER_TEMP/psdk-fmod-download.tar.gz"
+
+      - name: Build LiteRGSS, LiteCGSS and SFMLAudio
+        run: |
+          RUBY_VERSION="$RUBY_VERSION" \
+          RUBY_SHA256="$RUBY_SHA256" \
+          RAKE_VERSION="$RAKE_VERSION" \
+          RAKE_COMPILER_VERSION="$RAKE_COMPILER_VERSION" \
+          OUTPUT_DIR="$GITHUB_WORKSPACE/generated/litergss" \
+          bash linux/x86_64/litergss/build.sh
+
+      - name: Build RubyFMOD and FMOD runtime
+        run: |
+          RUBY_VERSION="$RUBY_VERSION" \
+          SOURCE_DIR="$GITHUB_WORKSPACE/sources/ruby-fmod" \
+          FMOD_SDK_DIR="$FMOD_SDK_DIR" \
+          OUTPUT_DIR="$GITHUB_WORKSPACE/generated/rubyfmod" \
+          linux/x86_64/rubyfmod/build.sh
+
+      - name: Build sfeMovie and locked FFmpeg runtime
+        run: |
+          RUBY_VERSION="$RUBY_VERSION" \
+          SOURCE_DIR="$GITHUB_WORKSPACE/sources/sfemovie" \
+          OUTPUT_DIR="$GITHUB_WORKSPACE/generated/sfemovie" \
+          linux/x86_64/sfemovie/build.sh
+
+      - name: Build SFEMovie Ruby binding
+        run: |
+          RUBY_VERSION="$RUBY_VERSION" \
+          SFEMOVIE_RUBY_SOURCE_DIR="$GITHUB_WORKSPACE/sources/sfemovie-ruby" \
+          SFEMOVIE_SOURCE_DIR="$GITHUB_WORKSPACE/sources/sfemovie" \
+          LITERGSS_SOURCE_DIR="$GITHUB_WORKSPACE/sources/litergss" \
+          LITERGSS_BUILD_DIR="$GITHUB_WORKSPACE/generated/litergss/build-support" \
+          SFEMOVIE_RUNTIME_DIR="$GITHUB_WORKSPACE/generated/sfemovie" \
+          OUTPUT_DIR="$GITHUB_WORKSPACE/generated/sfemovie-ruby" \
+          linux/x86_64/sfemovie-ruby/build.sh
+
+      - name: Assemble Linux.7z
+        run: |
+          LITERGSS_DIR="$GITHUB_WORKSPACE/generated/litergss" \
+          RUBY_FMOD_DIR="$GITHUB_WORKSPACE/generated/rubyfmod" \
+          SFEMOVIE_DIR="$GITHUB_WORKSPACE/generated/sfemovie" \
+          SFEMOVIE_RUBY_DIR="$GITHUB_WORKSPACE/generated/sfemovie-ruby" \
+          OUTPUT_DIR="$GITHUB_WORKSPACE/generated/Linux-x86-64" \
+          ARCHIVE_PATH="$GITHUB_WORKSPACE/dist/Linux.7z" \
+          linux/x86_64/assemble-release.sh
+          (cd dist; sha256sum Linux.7z > Linux.7z.sha256)
+
+      - name: Smoke test the assembled payload on glibc 2.28
+        run: RELEASE_DIR="$GITHUB_WORKSPACE/generated/Linux-x86-64" linux/x86_64/verify-release.sh
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        # act --bind leaves the archive in dist/ without an artifact server.
+        if: ${{ !env.ACT }}
+        with:
+          name: Linux-x86-64
+          path: |
+            dist/Linux.7z
+            dist/Linux.7z.sha256
+          if-no-files-found: error
+
+      - name: Remove temporary FMOD SDK
+        if: ${{ always() }}
+        run: |
+          rm -rf -- sources/fmod-sdk
+          rm -f -- "$RUNNER_TEMP/psdk-fmod-download.tar.gz" "$RUNNER_TEMP/psdk-fmod-download.tar.gz.tmp"
+
+  verify:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Preserve the preceding job's local archive under act --bind.
+          clean: ${{ !env.ACT }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: ${{ !env.ACT }}
+        with:
+          name: Linux-x86-64
+          path: dist
+      - name: Install archive extraction tool
+        run: sudo apt-get update && sudo apt-get install --yes p7zip-full
+      - name: Verify archive on a fresh runner using glibc 2.28
+        run: |
+          (cd dist; sha256sum -c Linux.7z.sha256)
+          mkdir -p generated
+          # Keep nested Docker bind mounts under the shared workspace for act.
+          verify_dir="$(mktemp -d "$GITHUB_WORKSPACE/generated/linux-verify.XXXXXX")"
+          trap 'rm -rf "$verify_dir"' EXIT
+          7z x dist/Linux.7z -o"$verify_dir"
+          RELEASE_DIR="$verify_dir/ruby-dist" bash linux/x86_64/verify-release.sh

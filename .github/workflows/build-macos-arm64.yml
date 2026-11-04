@@ -1,0 +1,106 @@
+name: Build macOS ARM64
+
+on:
+  workflow_call:
+    secrets:
+      FMOD_USER:
+        required: true
+      FMOD_PASSWORD:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check shared dependency pins and source downloader
+        run: |
+          python3 .github/scripts/check-dependency-pins.py
+          python3 tests/test_source_download.py
+      - name: Bootstrap checksum-pinned build tools
+        run: |
+          bash macos/arm64/bootstrap-tools.sh
+          python3 -m venv generated/download-venv
+          generated/download-venv/bin/pip install requests==2.32.5
+      - name: Read macOS release configuration
+        run: sed -n '/^[A-Za-z_][A-Za-z0-9_]*=/p' config/macos-arm64.conf >> "$GITHUB_ENV"
+      - name: Fetch pinned component sources
+        run: bash .github/scripts/fetch-sources.sh config/macos-arm64.conf
+      - name: Download authorized FMOD macOS SDK
+        env:
+          FMOD_USER: ${{ secrets.FMOD_USER }}
+          FMOD_PASSWORD: ${{ secrets.FMOD_PASSWORD }}
+        run: |
+          generated/download-venv/bin/python .github/scripts/download_fmod.py \
+            --version "$FMOD_DOWNLOAD_VERSION" --platform macos --output sources/fmod-download.dmg
+          bash macos/arm64/extract-fmod.sh sources/fmod-download.dmg
+      - name: Build runtime dependencies for macOS 11 ARM64
+        run: bash macos/arm64/build.sh dependencies
+      - name: Build embedded Ruby
+        run: bash macos/arm64/build.sh ruby
+      - name: Build LiteRGSS, RubyFMOD, SFMLAudio and SFEMovie
+        run: |
+          mkdir -p generated/logs
+          set +e
+          bash macos/arm64/build.sh components 2>&1 | tee generated/logs/macos-components.log
+          build_status=${PIPESTATUS[0]}
+          set -e
+          if (( build_status != 0 )); then
+            echo '::group::Compiler error summary'
+            grep -n -B 4 -A 8 -E 'fatal error:|error:|Undefined symbols|ld: ' generated/logs/macos-components.log || true
+            echo '::endgroup::'
+          fi
+          exit "$build_status"
+      - name: Preserve component compiler log
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos-component-diagnostics
+          path: generated/logs/macos-components.log
+          if-no-files-found: ignore
+      - name: Assemble macOS.7z
+        run: |
+          OUTPUT_DIR="$GITHUB_WORKSPACE/generated/MacOS-arm64/ruby-dist" \
+          ARCHIVE_PATH="$GITHUB_WORKSPACE/dist/macOS.7z" \
+          bash macos/arm64/assemble-release.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: MacOS-arm64
+          path: |
+            dist/macOS.7z
+            dist/macOS.7z.sha256
+          if-no-files-found: error
+      - name: Remove temporary FMOD SDK
+        if: ${{ always() }}
+        run: rm -rf sources/fmod-sdk sources/fmod-download.dmg
+
+  verify:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-26]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: MacOS-arm64
+          path: dist
+      - name: Verify archive on a fresh ARM runner without build dependencies
+        run: |
+          test "$(uname -m)" = arm64
+          bash macos/arm64/bootstrap-tools.sh archive
+          (cd dist; shasum -a 256 -c macOS.7z.sha256)
+          mkdir -p generated/MacOS-arm64
+          "$PWD/generated/macos-arm64-tools/bin/7zz" x dist/macOS.7z -ogenerated/MacOS-arm64
+          bash macos/arm64/verify-release.sh

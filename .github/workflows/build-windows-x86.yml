@@ -1,0 +1,99 @@
+name: Build Windows x86
+
+on:
+  workflow_call:
+    secrets:
+      FMOD_USER:
+        required: true
+      FMOD_PASSWORD:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Bootstrap isolated checksum-pinned CI toolchain
+        timeout-minutes: 30
+        run: ./windows/x86/bootstrap.ps1
+      - name: Fetch pinned source revisions
+        run: ./windows/x86/run.ps1 fetch
+      - name: Preserve bootstrap extraction diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-bootstrap-diagnostics
+          path: generated/windows-x86/extract-msys2.*.log
+          if-no-files-found: ignore
+      - name: Check shared dependency pins and test the PE auditor and layout contract
+        run: |
+          $env:MSYSTEM = 'MINGW32'
+          $env:CHERE_INVOKING = '1'
+          & ./generated/windows-x86/msys64/usr/bin/bash.exe -lc 'source windows/x86/env.sh; python .github/scripts/check-dependency-pins.py && python windows/x86/test_pe.py && python windows/x86/test_layout.py'
+          if ($LASTEXITCODE) { throw 'Dependency pins or PE/layout auditor checks failed' }
+      - name: Download and extract the FMOD Windows installer
+        env:
+          FMOD_USER: ${{ secrets.FMOD_USER }}
+          FMOD_PASSWORD: ${{ secrets.FMOD_PASSWORD }}
+        run: ./windows/x86/run.ps1 download-fmod
+      - name: Build 32-bit OpenSSL, SFML, FFmpeg and subtitle dependencies
+        run: ./windows/x86/run.ps1 dependencies
+      - name: Build embedded 32-bit Ruby
+        run: ./windows/x86/run.ps1 ruby
+      - name: Build LiteCGSS, LiteRGSS and SFMLAudio
+        run: ./windows/x86/run.ps1 graphics
+      - name: Build native sfeMovie and Ruby SFEMovie
+        run: ./windows/x86/run.ps1 movie
+      - name: Build RubyFMOD
+        run: ./windows/x86/run.ps1 fmod
+      - name: Package Ruby executables, root runtime DLL and private DLL manifests
+        run: ./windows/x86/run.ps1 assemble
+      - name: Test both Ruby executables with gems enabled and disabled, then archive
+        run: ./windows/x86/run.ps1 verify
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: Windows-x86
+          path: |
+            dist/Windows.7z
+            dist/Windows.7z.sha256
+          if-no-files-found: error
+      - name: Remove temporary FMOD SDK
+        if: ${{ always() }}
+        run: |
+          $workspace = [IO.Path]::GetFullPath($env:GITHUB_WORKSPACE)
+          foreach ($relative in @('generated/windows-x86/fmod-sdk', 'generated/windows-x86/fmod-download.exe')) {
+            $target = [IO.Path]::GetFullPath((Join-Path $workspace $relative))
+            if (!$target.StartsWith($workspace + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+              throw 'Cleanup target escaped workspace'
+            }
+            if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
+          }
+
+  verify:
+    needs: build
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: Windows-x86
+          path: dist
+      - name: Verify archive and legacy gems-disabled launch mode on a fresh runner
+        shell: pwsh
+        run: |
+          $expected = ((Get-Content dist/Windows.7z.sha256 -Raw) -split '\s+')[0]
+          if ((Get-FileHash dist/Windows.7z -Algorithm SHA256).Hash -ne $expected) { throw 'Archive checksum mismatch' }
+          ./windows/x86/extract-release.ps1 -Archive dist/Windows.7z -Destination 'generated/relocated runtime'
+          ./windows/x86/verify-runtime.ps1 -Runtime 'generated/relocated runtime'
