@@ -1,0 +1,8 @@
+# name sha256 source-url
+# Build tools only: CMake 4.4.4, Ninja 1.13.2, pkgconf 3.0.7, 7-Zip 26.03.
+# These match the local tool versions used by this project. CMake/Ninja use
+# upstream macOS binaries; pkgconf and 7-Zip are built from source.
+cmake 4b7b73704b1db9b374e5c9ab8e17ac6148b817b6396ee75cd94a852cbac9d305 https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-macos-universal.tar.gz
+ninja c99048673aa765960a99cf10c6ddb9f1fad506099ff0a0e137ad8960a88f321b https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-mac.zip
+pkgconf c926ff491cbd9a331a589160811bd97ab1749b4d5198a519338f2cdfabe6940a https://distfiles.ariadne.space/pkgconf/pkgconf-3.0.7.tar.xz
+sevenzip 9cbde5099c6deb73691b0579063da5827522ccbbcba3f0020fd04e8c8c16c0d4 https://github.com/ip7z/7zip/releases/download/26.03/7z2603-src.tar.xz

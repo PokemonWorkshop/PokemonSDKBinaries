@@ -1,0 +1,10 @@
+**
+!config/
+!config/linux-x86_64-sources.lock
+!sources/
+!sources/archives/
+!sources/archives/ffmpeg.tar.xz
+!linux/
+!linux/x86_64/
+!linux/x86_64/sfemovie/
+!linux/x86_64/sfemovie/**

@@ -1,0 +1,121 @@
+name: Release PSDK runtimes
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+# A release is authorized by the protected v* tag itself.  Do not add a
+# workflow_dispatch trigger: GitHub grants it to repository Write users.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  authorize_release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require a protected release tag
+        env:
+          RELEASE_EVENT: ${{ github.event_name }}
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_REF_PROTECTED: ${{ github.ref_protected }}
+        run: |
+          if [[ "$RELEASE_EVENT" != push || "$RELEASE_REF" != refs/tags/v* || "$RELEASE_REF_PROTECTED" != true ]]; then
+            echo '::error::Releases require a protected v* tag push. Configure the repository tag ruleset before releasing.'
+            exit 1
+          fi
+
+  linux_x86_64:
+    needs: authorize_release
+    uses: ./.github/workflows/build-linux-x86_64.yml
+    secrets:
+      FMOD_USER: ${{ secrets.FMOD_USER }}
+      FMOD_PASSWORD: ${{ secrets.FMOD_PASSWORD }}
+
+  macos_arm64:
+    needs: authorize_release
+    uses: ./.github/workflows/build-macos-arm64.yml
+    secrets:
+      FMOD_USER: ${{ secrets.FMOD_USER }}
+      FMOD_PASSWORD: ${{ secrets.FMOD_PASSWORD }}
+
+  windows_x86:
+    needs: authorize_release
+    uses: ./.github/workflows/build-windows-x86.yml
+    secrets:
+      FMOD_USER: ${{ secrets.FMOD_USER }}
+      FMOD_PASSWORD: ${{ secrets.FMOD_PASSWORD }}
+
+  # Add each future platform build job to this list. GitHub only schedules
+  # this job after every required platform job completed successfully.
+  release:
+    needs: [linux_x86_64, macos_arm64, windows_x86]
+    runs-on: ubuntu-24.04
+    if: ${{ success() }}
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: Linux-x86-64
+          path: dist
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: MacOS-arm64
+          path: dist
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: Windows-x86
+          path: dist
+
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          test -s dist/Linux.7z
+          test -s dist/macOS.7z
+          test -s dist/Windows.7z
+          (cd dist; sha256sum -c Linux.7z.sha256)
+          (cd dist; sha256sum -c Windows.7z.sha256)
+          (cd dist; sha256sum -c macOS.7z.sha256)
+          # Publish legacy SHA-1 metadata; SHA-256 sidecars stay internal to CI.
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          dist = Path("dist")
+          manifest = {"version": os.environ["RELEASE_TAG"].removeprefix("v")}
+          for platform in ("Linux", "macOS", "Windows"):
+              digest = hashlib.sha1()
+              with (dist / f"{platform}.7z").open("rb") as archive:
+                  for chunk in iter(lambda: archive.read(1024 * 1024), b""):
+                      digest.update(chunk)
+              manifest[platform.lower()] = digest.hexdigest()
+          (dist / "version.json").write_text(
+              json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+          )
+          PY
+          assets=(dist/Linux.7z dist/macOS.7z dist/Windows.7z dist/version.json)
+          if [[ "${RELEASE_DRY_RUN:-}" == "true" ]]; then
+            echo "Dry run: would publish Linux, macOS and Windows runtimes to release ${RELEASE_TAG}."
+            cat dist/version.json
+            exit 0
+          fi
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" --title "$RELEASE_TAG" --generate-notes
+          fi
